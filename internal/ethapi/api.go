@@ -519,18 +519,24 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.
 	return nil, err
 }
 
-func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses []*common.Address, blockNrFirst rpc.BlockNumber, blockNrLast rpc.BlockNumber) *big.Int {
+func wei2eth(value *big.Int) float64 {
+	temp := new(big.Int)
+	temp = temp.Exp(new(big.Int).SetInt64(10), new(big.Int).SetInt64(10), nil)
+	temp = temp.Div(value, temp)
+						
+	temp2 := new(big.Float).SetInt(temp)
+	temp2 = temp2.Quo(temp2, new(big.Float).SetFloat64(1e8))
+	temp_float, _ := temp2.Float64()
+
+	return temp_float
+}
+
+func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses []*common.Address, blockNrFirst rpc.BlockNumber, blockNrLast rpc.BlockNumber) []float64 {
 	// this function is accessible from rpc as "eth_accountsStatement(min, max)", see example below
 	// request:
-	//	curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accountsStatement","params":[["0x3a1b455a7c736a615825be36b158b906cef9a435"], "0x42CA4A","0x42CA4B"],"id":1}' localhost:8545
+	//	curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accountsStatement","params":[["0x3a1b455a7c736a615825be36b158b906cef9a435","0xcE92dEb7FD9515891D17fc976Ce3D610e6CC60E6","0xE93b40F8A647566E730537dbC933a953d29e31eE"], "0x417C4F","0x42CA61"],"id":1}' localhost:8545
 	// response:
-	//	{"jsonrpc":"2.0","id":1,"result":true}
-	// need to adjust input arguments and return type
-	// and add the implementation, obviously
-
-	//for blockNr := blockNrFirst, blockNr < blockNrLast, blockNr++ {
-	//	fmt.PrintLn(blockNr)
-	//}
+	//	{"jsonrpc":"2.0","id":1,"result":[0.99,19.99,0.005,0.23,0.72,0.2,19.99,1.2538]}
 
 	nHeadBlock := s.BlockNumber().Int64() - 40 // ~40*15sec (10 min). ignore very recent blocks
 	nLastBlock := blockNrLast.Int64()
@@ -543,26 +549,23 @@ func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses [
 		nFirstBlock = nLastBlock
 	}
 
-	sum := new(big.Int).SetInt64(0)
-	step := new(big.Int).SetInt64(1)
+	var transfers []float64
 
 	for index := nFirstBlock; index < nLastBlock; index++ {
 		var nrIndex rpc.BlockNumber = rpc.BlockNumber(index)
 		block, _ := s.b.BlockByNumber(ctx, nrIndex)
 		if block != nil {
 			for _, tx := range block.Transactions() {
-				//for _, acc := range addresses {
-				//	if acc == tx.To() {
-				//		sum.Add(sum, tx.Value())
-tx.Value()
-sum.Add(sum, step)
-				//	}
-				//}
+				for _, acc := range addresses {
+					if acc != nil && tx.To() != nil && *acc == *tx.To() {
+						transfers = append(transfers, wei2eth(tx.Value()))
+					}
+				}
 			}
 		}
 	}
 
-	return sum
+	return transfers
 } 
 
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
