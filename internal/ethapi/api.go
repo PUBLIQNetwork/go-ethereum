@@ -519,15 +519,50 @@ func (s *PublicBlockChainAPI) GetBlockByNumber(ctx context.Context, blockNr rpc.
 	return nil, err
 }
 
-func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, blockNrFirst rpc.BlockNumber, blockNrLast rpc.BlockNumber) bool {
+func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses []*common.Address, blockNrFirst rpc.BlockNumber, blockNrLast rpc.BlockNumber) *big.Int {
 	// this function is accessible from rpc as "eth_accountsStatement(min, max)", see example below
 	// request:
-	//	curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accountsStatement","params":["0x1","0x2"],"id":1}' localhost:8545
+	//	curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accountsStatement","params":[["0x3a1b455a7c736a615825be36b158b906cef9a435"], "0x42CA4A","0x42CA4B"],"id":1}' localhost:8545
 	// response:
 	//	{"jsonrpc":"2.0","id":1,"result":true}
 	// need to adjust input arguments and return type
 	// and add the implementation, obviously
-	return true
+
+	//for blockNr := blockNrFirst, blockNr < blockNrLast, blockNr++ {
+	//	fmt.PrintLn(blockNr)
+	//}
+
+	nHeadBlock := s.BlockNumber().Int64() - 40 // ~40*15sec (10 min). ignore very recent blocks
+	nLastBlock := blockNrLast.Int64()
+	nFirstBlock := blockNrFirst.Int64()
+
+	if nLastBlock <= 0 || nLastBlock > nHeadBlock {
+		nLastBlock = nHeadBlock
+	}
+	if nFirstBlock >= nLastBlock || nFirstBlock < 0 {
+		nFirstBlock = nLastBlock
+	}
+
+	sum := new(big.Int).SetInt64(0)
+	step := new(big.Int).SetInt64(1)
+
+	for index := nFirstBlock; index < nLastBlock; index++ {
+		var nrIndex rpc.BlockNumber = rpc.BlockNumber(index)
+		block, _ := s.b.BlockByNumber(ctx, nrIndex)
+		if block != nil {
+			for _, tx := range block.Transactions() {
+				//for _, acc := range addresses {
+				//	if acc == tx.To() {
+				//		sum.Add(sum, tx.Value())
+tx.Value()
+sum.Add(sum, step)
+				//	}
+				//}
+			}
+		}
+	}
+
+	return sum
 } 
 
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
