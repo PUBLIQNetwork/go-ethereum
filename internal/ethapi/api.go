@@ -531,41 +531,89 @@ func wei2eth(value *big.Int) float64 {
 	return temp_float
 }
 
-func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses []*common.Address, blockNrFirst rpc.BlockNumber, blockNrLast rpc.BlockNumber) []float64 {
+func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses []*common.Address, blockNrFirst rpc.BlockNumber, blockNrLast rpc.BlockNumber) map[string]interface{} {
 	// this function is accessible from rpc as "eth_accountsStatement(min, max)", see example below
 	// request:
-	//	curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accountsStatement","params":[["0x3a1b455a7c736a615825be36b158b906cef9a435","0xcE92dEb7FD9515891D17fc976Ce3D610e6CC60E6","0xE93b40F8A647566E730537dbC933a953d29e31eE"], "0x417C4F","0x42CA61"],"id":1}' localhost:8545
+	//	curl -X POST --data '{"jsonrpc":"2.0","method":"eth_accountsStatement","params":[["0x3a1b455a7c736a615825be36b158b906cef9a435","0xcE92dEb7FD9515891D17fc976Ce3D610e6CC60E6","0xE93b40F8A647566E730537dbC933a953d29e31eE"], "0x417C4F","0x42E2B2"],"id":1}' localhost:8545
 	// response:
-	//	{"jsonrpc":"2.0","id":1,"result":[0.99,19.99,0.005,0.23,0.72,0.2,19.99,1.2538]}
+	//	{"jsonrpc":"2.0","id":1,"result":{"0x3A1B455a7c736A615825Be36b158b906cef9a435":{"Balance":1.2538,"Transactions_in":[{"Block":4377162,"Tx_Hash":"0x39346afb500b2a29f7f23d8f1a9eb24b0d3a31c052efe8bad0f20299e72e3c1f","Value":1.2538,"Timestamp":1508245377}]},"0xE93b40F8A647566E730537dbC933a953d29e31eE":{"Balance":1.15420445,"Transactions_in":[{"Block":4364425,"Tx_Hash":"0xd31571778d6ea5c599648171111a852eb6a68df55823cf2fb68f8dff922fb2f7","Value":0.005,"Timestamp":1507966022},{"Block":4371640,"Tx_Hash":"0x9e11388d2cd547d6e645e31da285b1cc0ac6df14ca27bb9c71ee090065746f31","Value":0.23,"Timestamp":1508165725},{"Block":4372028,"Tx_Hash":"0x4d91c815f5de64abc28a7c243c52f73ab650cdf30a16e6fe85aff865d77f4d46","Value":0.72,"Timestamp":1508172232},{"Block":4377162,"Tx_Hash":"0x7ace20164edd6df29590baa7b121ee24dbce78247b03509599bfccd5f452cfa9","Value":0.2,"Timestamp":1508245377}]},"0xcE92dEb7FD9515891D17fc976Ce3D610e6CC60E6":{"Balance":0.00078,"Transactions_in":[{"Block":4291663,"Tx_Hash":"0x3640ce6855afc750ff9077d5a2c8d3b107211d0333cae704d511d508c1124bad","Value":0.99,"Timestamp":1505838163},{"Block":4361278,"Tx_Hash":"0xca9516ec4caf2f3db4341b77e7e9627319149f9f057156e65d002804995e27e8","Value":19.99,"Timestamp":1507872000},{"Block":4377162,"Tx_Hash":"0xd8134e4a9b7c89fa45d8b857bde47cb28d48d73988eccdd953b16f11a0b7b832","Value":19.99,"Timestamp":1508245377}]},"Blockrange":[4291663,4383410]}}
 
-	nHeadBlock := s.BlockNumber().Int64() - 40 // ~40*15sec (10 min). ignore very recent blocks
+	nHeadBlock := s.BlockNumber().Int64() - 40 // ~40*15sec (10 min). ignore the most recent blocks
 	nLastBlock := blockNrLast.Int64()
 	nFirstBlock := blockNrFirst.Int64()
 
 	if nLastBlock <= 0 || nLastBlock > nHeadBlock {
 		nLastBlock = nHeadBlock
+		blockNrLast = rpc.BlockNumber(nLastBlock)
 	}
 	if nFirstBlock >= nLastBlock || nFirstBlock < 0 {
 		nFirstBlock = nLastBlock
 	}
 
-	var transfers []float64
+	type transaction_info struct{
+		//From string
+		Block int64
+		Tx_Hash string
+		Value float64
+		Timestamp int32
+	}
+
+	set_addresses := make(map[common.Address]int32)
+	for _, address := range addresses {
+		set_addresses[*address] = 1
+	}
+	transactions := make(map[common.Address][]transaction_info)
 
 	for index := nFirstBlock; index < nLastBlock; index++ {
 		var nrIndex rpc.BlockNumber = rpc.BlockNumber(index)
 		block, _ := s.b.BlockByNumber(ctx, nrIndex)
 		if block != nil {
 			for _, tx := range block.Transactions() {
-				for _, acc := range addresses {
-					if acc != nil && tx.To() != nil && *acc == *tx.To() {
-						transfers = append(transfers, wei2eth(tx.Value()))
+				var acc *common.Address
+				if tx.To() != nil {
+					_, exists := set_addresses[*tx.To()]
+					if exists == false {
+						acc = nil
+					} else {
+						acc = tx.To()
 					}
+				}
+
+				if acc != nil {
+					ethers := wei2eth(tx.Value())
+
+					var ti transaction_info
+					//ti.From = tx.From() no such method
+					ti.Block = block.Number().Int64()
+					ti.Tx_Hash = tx.Hash().Hex()
+					ti.Value = ethers
+					ti.Timestamp = int32(block.Time().Int64())
+					transactions[*acc] = append(transactions[*acc], ti)
 				}
 			}
 		}
 	}
 
-	return transfers
+	result := map[string]interface{}{
+	    "Blockrange": []interface{}{
+	        nFirstBlock,
+	        nLastBlock,
+	    },
+	}
+	for acc, account_transactions := range transactions {
+		var balance64 *float64
+		balance, err := s.GetBalance(ctx, acc, blockNrLast - 1)
+		if err == nil && balance != nil {
+			balance64 = new(float64)
+			*balance64 = wei2eth(balance)
+		}
+		result[acc.Hex()] = map[string]interface{}{
+		"Transactions_in": account_transactions,
+		"Balance": balance64,
+		}
+	}
+
+	return result
 } 
 
 // GetBlockByHash returns the requested block. When fullTx is true all transactions in the block are returned in full
