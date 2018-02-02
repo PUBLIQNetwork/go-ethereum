@@ -613,6 +613,11 @@ func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses [
 		}
 	}
 
+	block, _ := s.b.BlockByNumber(ctx, rpc.BlockNumber(nLastBlock-1));
+	if block != nil {
+		result["last_block_time"] = int32(block.Time().Int64());
+		result["last_block_hash"] = block.Hash();
+	}
 	return result
 } 
 
