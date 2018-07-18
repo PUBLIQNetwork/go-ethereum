@@ -538,9 +538,9 @@ func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses [
 	// response:
 	//	{"jsonrpc":"2.0","id":1,"result":{"0x3A1B455a7c736A615825Be36b158b906cef9a435":{"Balance":1.2538,"Transactions_in":[{"Block":4377162,"Tx_Hash":"0x39346afb500b2a29f7f23d8f1a9eb24b0d3a31c052efe8bad0f20299e72e3c1f","Value":1.2538,"Timestamp":1508245377}]},"0xE93b40F8A647566E730537dbC933a953d29e31eE":{"Balance":1.15420445,"Transactions_in":[{"Block":4364425,"Tx_Hash":"0xd31571778d6ea5c599648171111a852eb6a68df55823cf2fb68f8dff922fb2f7","Value":0.005,"Timestamp":1507966022},{"Block":4371640,"Tx_Hash":"0x9e11388d2cd547d6e645e31da285b1cc0ac6df14ca27bb9c71ee090065746f31","Value":0.23,"Timestamp":1508165725},{"Block":4372028,"Tx_Hash":"0x4d91c815f5de64abc28a7c243c52f73ab650cdf30a16e6fe85aff865d77f4d46","Value":0.72,"Timestamp":1508172232},{"Block":4377162,"Tx_Hash":"0x7ace20164edd6df29590baa7b121ee24dbce78247b03509599bfccd5f452cfa9","Value":0.2,"Timestamp":1508245377}]},"0xcE92dEb7FD9515891D17fc976Ce3D610e6CC60E6":{"Balance":0.00078,"Transactions_in":[{"Block":4291663,"Tx_Hash":"0x3640ce6855afc750ff9077d5a2c8d3b107211d0333cae704d511d508c1124bad","Value":0.99,"Timestamp":1505838163},{"Block":4361278,"Tx_Hash":"0xca9516ec4caf2f3db4341b77e7e9627319149f9f057156e65d002804995e27e8","Value":19.99,"Timestamp":1507872000},{"Block":4377162,"Tx_Hash":"0xd8134e4a9b7c89fa45d8b857bde47cb28d48d73988eccdd953b16f11a0b7b832","Value":19.99,"Timestamp":1508245377}]},"Blockrange":[4291663,4383410]}}
 
-	nHeadBlock := s.BlockNumber().Int64() - 40 // ~40*15sec (10 min). ignore the most recent blocks
-	nLastBlock := blockNrLast.Int64()
-	nFirstBlock := blockNrFirst.Int64()
+	nHeadBlock := hexutil.Uint64(s.BlockNumber()) - 40 // ~40*15sec (10 min). ignore the most recent blocks
+	nLastBlock := hexutil.Uint64(blockNrLast)
+	nFirstBlock := hexutil.Uint64(blockNrFirst)
 
 	if nLastBlock <= 0 || nLastBlock > nHeadBlock {
 		nLastBlock = nHeadBlock
@@ -604,8 +604,10 @@ func (s *PublicBlockChainAPI) AccountsStatement(ctx context.Context, addresses [
 		var balance64 *float64
 		balance, err := s.GetBalance(ctx, acc, blockNrLast - 1)
 		if err == nil && balance != nil {
+			var balance_ *big.Int
+			*balance_ = big.Int(*balance)
 			balance64 = new(float64)
-			*balance64 = wei2eth(balance)
+			*balance64 = wei2eth(balance_)
 		}
 		result[acc.Hex()] = map[string]interface{}{
 		"Transactions_in": account_transactions,
