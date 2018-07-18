@@ -771,15 +771,17 @@ func makeDatabaseHandles() int {
 	if err != nil {
 		Fatalf("Failed to retrieve file descriptor allowance: %v", err)
 	}
-	if limit < 2048 {
-		if err := fdlimit.Raise(2048); err != nil {
+	limit = 4*2048
+	//if limit < 4*2048 {
+		if err := fdlimit.Raise(uint64(limit)); err != nil {
 			Fatalf("Failed to raise file descriptor allowance: %v", err)
 		}
-	}
-	if limit > 2048 { // cap database file descriptors even if more is available
-		limit = 2048
-	}
-	return limit / 2 // Leave half for networking and other stuff
+	//}
+	//if limit > 4*2048 { // cap database file descriptors even if more is available
+	//	limit = 2048
+	//}
+	//return limit / 2 // Leave half for networking and other stuff
+	return limit / 8
 }
 
 // MakeAddress converts an account specified directly as a hex encoded string or
